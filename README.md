@@ -9,7 +9,7 @@ Audio Toolkit is a production-ready Data2Flow plugin for offline audio analysis 
 | Audio Loader | Reads WAV/FLAC/other libsndfile-supported audio and emits workflow-ready audio plus metadata. | File upload | waveform, metadata, audio_report |
 | Audio Processor | Resamples, converts channels, trims silence, normalizes peak/RMS, and reports quality flags. | Audio Loader | processed_waveform, processing_report, audio_statistics |
 | Feature Extractor | Computes DSP features, MFCCs, spectrograms, mel spectrograms, and feature tables. | Audio Processor | feature_vectors, feature_summary, spectrogram images |
-| Audio Classifier | Uses a lightweight PyTorch DSP-feature classifier for offline triage. | Feature Extractor | predicted_class, probability_distribution, classification_report |
+| Audio Classifier | Uses a lightweight NumPy DSP-feature classifier for offline triage. | Feature Extractor | predicted_class, probability_distribution, classification_report |
 | Spectrogram Viewer | Generates waveform, spectrogram, and mel spectrogram plots. | Audio Processor | waveform_plot, spectrogram_plot, visualization_report |
 | Audio Insights | Combines upstream reports into a structured report, markdown summary, and metrics. | All upstream reports | structured_report, markdown_summary, metrics |
 
@@ -32,8 +32,7 @@ uv run python -m app.cli plugins install --path /tmp/Audio-Toolkit
 The plugin requires a dependency image with:
 
 ```text
-torch>=2.0.0
-torchaudio>=2.0.0
+numpy>=1.26.0
 pandas>=2.0.0
 matplotlib>=3.5.0
 soundfile>=0.12.1
@@ -43,7 +42,7 @@ soundfile>=0.12.1
 
 The classifier is intentionally offline and deterministic. Public pretrained audio taggers such as YAMNet and PANNs provide broader taxonomies, but they add external model weights and larger runtime assumptions. Data2Flow plugin execution copies node entrypoints into isolated runtime scripts, so every node is implemented as a self-contained `main.py` with no shared package imports.
 
-Audio I/O uses `soundfile` to avoid TorchAudio 2.9+ save-path reliance on TorchCodec. Torch and Torchaudio are still used for tensor operations, resampling, spectrograms, mel spectrograms, and MFCC extraction.
+Audio I/O uses `soundfile`, and DSP operations use NumPy for resampling, spectrograms, mel spectrograms, MFCC extraction, and classification. This keeps the runtime lightweight and avoids mapping large PyTorch shared libraries in constrained node runners.
 
 ## Recommended Workflow
 

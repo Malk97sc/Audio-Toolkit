@@ -13,8 +13,7 @@
     "subprocess": false
   },
   "pythonDependencies": [
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
+    "numpy>=1.26.0",
     "pandas>=2.0.0",
     "matplotlib>=3.5.0",
     "soundfile>=0.12.1"

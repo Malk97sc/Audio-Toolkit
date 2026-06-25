@@ -49,7 +49,7 @@
       "description": "Limit plots to the first N seconds so long recordings remain readable."
     }
   ],
-  "dependencies": ["torch", "torchaudio", "soundfile", "matplotlib", "math"],
+  "dependencies": ["numpy", "soundfile", "matplotlib", "math"],
   "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
   "preview": "plot",
   "cachePolicy": "content_hash",

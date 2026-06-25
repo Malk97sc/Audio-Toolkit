@@ -87,7 +87,7 @@
       "description": "Energy percentage used for spectral rolloff."
     }
   ],
-  "dependencies": ["torch", "torchaudio", "soundfile", "pandas", "matplotlib", "math"],
+  "dependencies": ["numpy", "soundfile", "pandas", "matplotlib", "math"],
   "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
   "preview": "table_sample",
   "cachePolicy": "content_hash",

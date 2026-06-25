@@ -22,14 +22,13 @@ The plugin uses the embedded DSP classifier because it satisfies Data2Flow's cur
 
 ## I/O Decision
 
-TorchAudio 2.9 and newer route `torchaudio.save()` through TorchCodec. During runtime validation, this failed without an explicit TorchCodec dependency. Instead of adding another PyTorch media runtime dependency, Audio Toolkit uses `soundfile` for file I/O and Torch/Torchaudio for DSP.
+TorchAudio 2.9 and newer route `torchaudio.save()` through TorchCodec. During runtime validation, this failed without an explicit TorchCodec dependency. Importing PyTorch also adds a large shared-library footprint in constrained node runners. Audio Toolkit therefore uses `soundfile` for file I/O and NumPy for DSP.
 
 This split keeps audio file handling simple:
 
 ```text
 soundfile: read/write WAV and FLAC
-torch: tensor math
-torchaudio: resampling and spectral transforms
+numpy: resampling, spectral transforms, MFCCs, and classifier math
 matplotlib: plots
 pandas: feature and probability tables
 ```

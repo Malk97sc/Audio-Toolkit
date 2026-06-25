@@ -1,9 +1,8 @@
 import math
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
-import torch
-import torchaudio.functional as F
 
 
 def _input_path(value) -> str:
@@ -14,49 +13,61 @@ def _input_path(value) -> str:
     return str(value)
 
 
-def _load_audio(path: str) -> tuple[torch.Tensor, int]:
+def _load_audio(path: str) -> tuple[np.ndarray, int]:
     data, sample_rate = sf.read(path, always_2d=True, dtype="float32")
-    waveform = torch.from_numpy(data).transpose(0, 1).contiguous()
-    return waveform, int(sample_rate)
+    return data.astype(np.float32, copy=False), int(sample_rate)
 
 
-def _save_audio(path: str, waveform: torch.Tensor, sample_rate: int) -> None:
-    data = waveform.detach().cpu().transpose(0, 1).numpy()
-    sf.write(path, data, sample_rate)
+def _save_audio(path: str, waveform: np.ndarray, sample_rate: int) -> None:
+    sf.write(path, waveform, sample_rate)
 
 
-def _to_mono(waveform: torch.Tensor) -> torch.Tensor:
-    if waveform.shape[0] == 1:
+def _resample_linear(data: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+    if source_rate == target_rate or data.size == 0:
+        return data.astype(np.float32, copy=False)
+    duration = data.shape[0] / float(source_rate)
+    target_size = max(1, int(round(duration * target_rate)))
+    source_positions = np.linspace(0.0, duration, num=data.shape[0], endpoint=False)
+    target_positions = np.linspace(0.0, duration, num=target_size, endpoint=False)
+    channels = [
+        np.interp(target_positions, source_positions, data[:, channel])
+        for channel in range(data.shape[1])
+    ]
+    return np.stack(channels, axis=1).astype(np.float32)
+
+
+def _to_mono(waveform: np.ndarray) -> np.ndarray:
+    if waveform.shape[1] == 1:
         return waveform
-    return waveform.mean(dim=0, keepdim=True)
+    return waveform.mean(axis=1, keepdims=True, dtype=np.float32)
 
 
-def _to_stereo(waveform: torch.Tensor) -> torch.Tensor:
-    if waveform.shape[0] == 1:
-        return waveform.repeat(2, 1)
-    if waveform.shape[0] > 2:
-        return waveform[:2]
+def _to_stereo(waveform: np.ndarray) -> np.ndarray:
+    if waveform.shape[1] == 1:
+        return np.repeat(waveform, 2, axis=1)
+    if waveform.shape[1] > 2:
+        return waveform[:, :2]
     return waveform
 
 
-def _trim_silence(waveform: torch.Tensor, sample_rate: int, threshold_db: float) -> tuple[torch.Tensor, dict]:
-    mono = _to_mono(waveform).squeeze(0).abs()
-    if mono.numel() == 0:
+def _trim_silence(waveform: np.ndarray, sample_rate: int, threshold_db: float) -> tuple[np.ndarray, dict]:
+    mono = np.abs(_to_mono(waveform)[:, 0])
+    if mono.size == 0:
         return waveform, {"trimmed": False, "samples_removed": 0, "seconds_removed": 0.0}
-    peak = mono.max().item()
+    peak = float(np.max(mono))
     if peak <= 0:
         return waveform, {"trimmed": False, "samples_removed": 0, "seconds_removed": 0.0}
 
     threshold = peak * (10.0 ** (threshold_db / 20.0))
-    active = (mono > threshold).nonzero(as_tuple=True)[0]
-    if active.numel() == 0:
+    active = np.flatnonzero(mono > threshold)
+    if active.size == 0:
         return waveform, {"trimmed": False, "samples_removed": 0, "seconds_removed": 0.0}
 
     margin = int(sample_rate * 0.025)
-    start = max(0, int(active[0].item()) - margin)
-    end = min(waveform.shape[-1], int(active[-1].item()) + 1 + margin)
-    trimmed = waveform[..., start:end]
-    removed = waveform.shape[-1] - trimmed.shape[-1]
+    start = max(0, int(active[0]) - margin)
+    end = min(waveform.shape[0], int(active[-1]) + 1 + margin)
+    trimmed = waveform[start:end]
+    removed = waveform.shape[0] - trimmed.shape[0]
     return trimmed, {
         "trimmed": removed > 0,
         "start_sample": start,
@@ -66,35 +77,35 @@ def _trim_silence(waveform: torch.Tensor, sample_rate: int, threshold_db: float)
     }
 
 
-def _stats(waveform: torch.Tensor, sample_rate: int) -> dict:
-    flat = waveform.float().reshape(-1)
-    duration = waveform.shape[-1] / float(sample_rate)
-    peak = flat.abs().max().item() if flat.numel() else 0.0
-    rms = torch.sqrt(torch.mean(flat.square())).item() if flat.numel() else 0.0
-    clipped = (flat.abs() >= 0.999).sum().item() if flat.numel() else 0
-    silence_ratio = (flat.abs() < 1e-4).float().mean().item() if flat.numel() else 1.0
+def _stats(waveform: np.ndarray, sample_rate: int) -> dict:
+    flat = waveform.reshape(-1).astype(np.float32, copy=False)
+    duration = waveform.shape[0] / float(sample_rate)
+    peak = float(np.max(np.abs(flat))) if flat.size else 0.0
+    rms = float(np.sqrt(np.mean(np.square(flat, dtype=np.float64)))) if flat.size else 0.0
+    clipped = int(np.sum(np.abs(flat) >= 0.999)) if flat.size else 0
+    silence_ratio = float(np.mean(np.abs(flat) < 1e-4)) if flat.size else 1.0
     return {
         "sample_rate": sample_rate,
-        "channels": int(waveform.shape[0]),
-        "samples": int(waveform.shape[-1]),
+        "channels": int(waveform.shape[1]),
+        "samples": int(waveform.shape[0]),
         "duration_seconds": round(duration, 4),
         "peak_amplitude": round(peak, 6),
         "rms_amplitude": round(rms, 6),
         "rms_db": round(20.0 * math.log10(max(rms, 1e-12)), 2),
-        "clipped_samples": int(clipped),
-        "clipping_ratio": round(clipped / max(1, flat.numel()), 6),
+        "clipped_samples": clipped,
+        "clipping_ratio": round(clipped / max(1, flat.size), 6),
         "silence_ratio": round(silence_ratio, 4),
     }
 
 
-def _apply_rms_gain(waveform: torch.Tensor, target_db: float) -> tuple[torch.Tensor, float]:
-    rms = torch.sqrt(torch.mean(waveform.float().square())).item()
+def _apply_rms_gain(waveform: np.ndarray, target_db: float) -> tuple[np.ndarray, float]:
+    rms = float(np.sqrt(np.mean(np.square(waveform, dtype=np.float64))))
     if rms <= 0:
         return waveform, 0.0
     current_db = 20.0 * math.log10(max(rms, 1e-12))
     gain_db = target_db - current_db
     gain = 10.0 ** (gain_db / 20.0)
-    return torch.clamp(waveform * gain, -1.0, 1.0), gain_db
+    return np.clip(waveform * gain, -1.0, 1.0).astype(np.float32), gain_db
 
 
 def run(inputs: dict, params: dict, context) -> dict:
@@ -104,7 +115,7 @@ def run(inputs: dict, params: dict, context) -> dict:
 
     source_path = _input_path(audio_value)
     waveform, original_rate = _load_audio(source_path)
-    if waveform.numel() == 0:
+    if waveform.size == 0:
         raise ValueError("Audio input contains no samples.")
 
     target_rate = int(params.get("target_sample_rate", 16000))
@@ -124,17 +135,17 @@ def run(inputs: dict, params: dict, context) -> dict:
 
     if original_rate != target_rate:
         context.log(f"Resampling from {original_rate} Hz to {target_rate} Hz")
-        waveform = F.resample(waveform, original_rate, target_rate)
+        waveform = _resample_linear(waveform, original_rate, target_rate)
         operations.append({"operation": "resample", "from": original_rate, "to": target_rate})
     current_rate = target_rate
 
-    before_channels = waveform.shape[0]
+    before_channels = waveform.shape[1]
     if channels == "mono":
         waveform = _to_mono(waveform)
     elif channels == "stereo":
         waveform = _to_stereo(waveform)
-    if waveform.shape[0] != before_channels:
-        operations.append({"operation": "channel_conversion", "from": int(before_channels), "to": int(waveform.shape[0])})
+    if waveform.shape[1] != before_channels:
+        operations.append({"operation": "channel_conversion", "from": int(before_channels), "to": int(waveform.shape[1])})
 
     if bool(params.get("trim_silence", True)):
         threshold_db = float(params.get("silence_threshold_db", -45.0))
@@ -151,9 +162,9 @@ def run(inputs: dict, params: dict, context) -> dict:
         target_peak = float(params.get("target_peak", 0.95))
         if target_peak <= 0 or target_peak > 1:
             raise ValueError("Peak Target must be greater than 0 and no more than 1.")
-        peak = waveform.abs().max().item()
+        peak = float(np.max(np.abs(waveform))) if waveform.size else 0.0
         if peak > 0:
-            waveform = waveform / peak * target_peak
+            waveform = (waveform / peak * target_peak).astype(np.float32)
         operations.append({"operation": "peak_normalization", "target_peak": target_peak, "previous_peak": round(peak, 6)})
 
     processed_stats = _stats(waveform, current_rate)

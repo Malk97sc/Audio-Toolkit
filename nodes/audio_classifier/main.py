@@ -1,11 +1,9 @@
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import soundfile as sf
-import torch
-import torchaudio
-import torchaudio.functional as F
 
 
 CLASSES = [
@@ -18,7 +16,7 @@ CLASSES = [
 ]
 
 
-WEIGHTS = torch.tensor(
+WEIGHTS = np.array(
     [
         [-4.0, -1.0, -1.0, -1.0, -1.0, 5.5, -0.5, -0.5, -0.5],
         [1.6, 1.2, 0.2, 0.1, 0.2, -1.2, -0.8, 0.5, -0.8],
@@ -27,10 +25,10 @@ WEIGHTS = torch.tensor(
         [1.4, 1.8, 0.8, 1.7, 1.5, -0.4, 0.5, -0.8, -0.4],
         [0.8, -1.2, -0.6, -0.8, -0.8, -0.2, -1.5, 0.7, 3.4],
     ],
-    dtype=torch.float32,
+    dtype=np.float32,
 )
 
-BIASES = torch.tensor([-1.1, 0.2, 0.1, -0.1, -0.4, 0.1], dtype=torch.float32)
+BIASES = np.array([-1.1, 0.2, 0.1, -0.1, -0.4, 0.1], dtype=np.float32)
 
 
 def _input_path(value) -> str:
@@ -47,35 +45,61 @@ def _feature_map_from_table(frame: pd.DataFrame) -> dict:
     return {str(row["feature"]): float(row["value"]) for _, row in frame.iterrows()}
 
 
+def _resample_linear(samples: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+    if source_rate == target_rate or samples.size == 0:
+        return samples.astype(np.float32, copy=False)
+    duration = samples.size / float(source_rate)
+    target_size = max(1, int(round(duration * target_rate)))
+    source_positions = np.linspace(0.0, duration, num=samples.size, endpoint=False)
+    target_positions = np.linspace(0.0, duration, num=target_size, endpoint=False)
+    return np.interp(target_positions, source_positions, samples).astype(np.float32)
+
+
+def _frame_signal(samples: np.ndarray, n_fft: int, hop_length: int) -> np.ndarray:
+    if samples.size < n_fft:
+        samples = np.pad(samples, (0, n_fft - samples.size))
+    frame_count = 1 + max(0, (samples.size - n_fft) // hop_length)
+    shape = (frame_count, n_fft)
+    strides = (samples.strides[0] * hop_length, samples.strides[0])
+    return np.lib.stride_tricks.as_strided(samples, shape=shape, strides=strides).copy()
+
+
+def _power_spectrogram(samples: np.ndarray, n_fft: int, hop_length: int) -> np.ndarray:
+    frames = _frame_signal(samples, n_fft, hop_length)
+    window = np.hanning(n_fft).astype(np.float32)
+    spectrum = np.fft.rfft(frames * window, n=n_fft, axis=1)
+    return (np.abs(spectrum) ** 2).T.astype(np.float32)
+
+
 def _extract_from_audio(path: str) -> dict:
     data, sample_rate = sf.read(path, always_2d=True, dtype="float32")
-    waveform = torch.from_numpy(data).transpose(0, 1).contiguous()
-    if waveform.numel() == 0:
+    samples = data.mean(axis=1, dtype=np.float32)
+    if samples.size == 0:
         raise ValueError("Audio input contains no samples.")
-    waveform = waveform.mean(dim=0, keepdim=True).float()
+
     target_rate = 16000
-    if sample_rate != target_rate:
-        waveform = F.resample(waveform, sample_rate, target_rate)
-        sample_rate = target_rate
-    spec = torchaudio.transforms.Spectrogram(n_fft=1024, hop_length=256, power=2.0)(waveform)
-    freqs = torch.linspace(0, sample_rate / 2, spec.shape[1]).unsqueeze(1)
-    energy = spec.squeeze(0).sum(dim=0).clamp_min(1e-12)
-    centroid = (freqs * spec.squeeze(0)).sum(dim=0) / energy
-    bandwidth = torch.sqrt((((freqs - centroid.unsqueeze(0)) ** 2) * spec.squeeze(0)).sum(dim=0) / energy)
-    flat = waveform.reshape(-1)
-    rms = torch.sqrt(torch.mean(flat.square())).item()
-    zcr = (flat[1:] * flat[:-1] < 0).float().mean().item() if flat.numel() > 1 else 0.0
-    flatness = torch.exp(torch.mean(torch.log(spec.clamp_min(1e-12)))) / torch.mean(spec.clamp_min(1e-12))
+    samples = _resample_linear(samples, int(sample_rate), target_rate)
+    sample_rate = target_rate
+    spec = _power_spectrogram(samples, 1024, 256)
+    frequencies = np.linspace(0.0, sample_rate / 2, spec.shape[0], dtype=np.float32)[:, None]
+    energy = np.maximum(spec.sum(axis=0), 1e-12)
+    centroid = (frequencies * spec).sum(axis=0) / energy
+    bandwidth = np.sqrt((((frequencies - centroid[None, :]) ** 2) * spec).sum(axis=0) / energy)
+    rms = float(np.sqrt(np.mean(np.square(samples, dtype=np.float64))))
+    zcr = float(np.mean(samples[1:] * samples[:-1] < 0)) if samples.size > 1 else 0.0
+    safe_spec = np.maximum(spec, 1e-12)
+    flatness = np.exp(np.mean(np.log(safe_spec))) / np.mean(safe_spec)
+    mean_spectrum = spec.mean(axis=1)
     return {
-        "duration_seconds": flat.numel() / sample_rate,
+        "duration_seconds": samples.size / sample_rate,
         "zero_crossing_rate": zcr,
         "rms_energy": rms,
         "rms_db": 20.0 * math.log10(max(rms, 1e-12)),
-        "spectral_centroid_hz": centroid.mean().item(),
-        "spectral_bandwidth_hz": bandwidth.mean().item(),
-        "spectral_rolloff_hz": centroid.quantile(0.85).item(),
-        "spectral_flatness": flatness.item(),
-        "dominant_frequency_hz": freqs[spec.squeeze(0).mean(dim=1).argmax()].item(),
+        "spectral_centroid_hz": float(np.mean(centroid)),
+        "spectral_bandwidth_hz": float(np.mean(bandwidth)),
+        "spectral_rolloff_hz": float(np.quantile(centroid, 0.85)),
+        "spectral_flatness": float(flatness),
+        "dominant_frequency_hz": float(frequencies[int(np.argmax(mean_spectrum)), 0]),
     }
 
 
@@ -92,7 +116,7 @@ def _summary_features(inputs: dict) -> dict:
     raise ValueError("Audio Classifier requires Feature Vectors, Feature Summary, or Audio.")
 
 
-def _scale(features: dict) -> torch.Tensor:
+def _scale(features: dict) -> np.ndarray:
     rms_db = float(features.get("rms_db", -80.0))
     zcr = float(features.get("zero_crossing_rate", 0.0))
     centroid = float(features.get("spectral_centroid_hz", 0.0))
@@ -104,18 +128,26 @@ def _scale(features: dict) -> torch.Tensor:
     silence_ratio = float(features.get("silence_ratio", 0.0))
     if rms_db < -70:
         silence_ratio = max(silence_ratio, 0.95)
-    vector = [
-        max(-2.0, min(2.0, (rms_db + 35.0) / 18.0)),
-        max(0.0, min(2.0, zcr / 0.12)),
-        max(0.0, min(2.0, centroid / 3500.0)),
-        max(0.0, min(2.0, bandwidth / 3500.0)),
-        max(0.0, min(2.0, rolloff / 6500.0)),
-        max(0.0, min(1.5, silence_ratio)),
-        max(0.0, min(2.0, flatness / 0.35)),
-        max(0.0, min(2.0, duration / 20.0)),
-        max(0.0, min(2.0, 1.0 - abs(dominant - 440.0) / 1200.0)),
-    ]
-    return torch.tensor(vector, dtype=torch.float32)
+    return np.array(
+        [
+            max(-2.0, min(2.0, (rms_db + 35.0) / 18.0)),
+            max(0.0, min(2.0, zcr / 0.12)),
+            max(0.0, min(2.0, centroid / 3500.0)),
+            max(0.0, min(2.0, bandwidth / 3500.0)),
+            max(0.0, min(2.0, rolloff / 6500.0)),
+            max(0.0, min(1.5, silence_ratio)),
+            max(0.0, min(2.0, flatness / 0.35)),
+            max(0.0, min(2.0, duration / 20.0)),
+            max(0.0, min(2.0, 1.0 - abs(dominant - 440.0) / 1200.0)),
+        ],
+        dtype=np.float32,
+    )
+
+
+def _softmax(values: np.ndarray) -> np.ndarray:
+    shifted = values - np.max(values)
+    exp_values = np.exp(shifted)
+    return exp_values / np.sum(exp_values)
 
 
 def _explanations(features: dict, predicted: str) -> list[str]:
@@ -147,18 +179,17 @@ def run(inputs: dict, params: dict, context) -> dict:
 
     features = _summary_features(inputs)
     vector = _scale(features)
-    logits = WEIGHTS.matmul(vector) + BIASES
-    probabilities = torch.softmax(logits, dim=0)
-    best_index = int(torch.argmax(probabilities).item())
+    probabilities = _softmax(WEIGHTS @ vector + BIASES)
+    best_index = int(np.argmax(probabilities))
     best_class = CLASSES[best_index]
-    confidence = float(probabilities[best_index].item())
+    confidence = float(probabilities[best_index])
     display_class = best_class if confidence >= threshold else "uncertain"
 
     probability_rows = [
         {
             "class": label,
-            "probability": round(float(probabilities[index].item()), 6),
-            "rank": int((probabilities > probabilities[index]).sum().item()) + 1,
+            "probability": round(float(probabilities[index]), 6),
+            "rank": int(np.sum(probabilities > probabilities[index])) + 1,
         }
         for index, label in enumerate(CLASSES)
     ]
@@ -166,7 +197,7 @@ def run(inputs: dict, params: dict, context) -> dict:
 
     report = {
         "title": "Audio Classification Report",
-        "model": "Audio Toolkit lightweight PyTorch DSP classifier v1",
+        "model": "Audio Toolkit lightweight NumPy DSP classifier v1",
         "predicted_class": display_class,
         "raw_predicted_class": best_class,
         "confidence": round(confidence, 6),

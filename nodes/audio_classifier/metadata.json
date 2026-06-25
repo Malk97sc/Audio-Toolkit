@@ -2,7 +2,7 @@
   "id": "audio_toolkit.audio_classifier",
   "name": "Audio Classifier",
   "category": "ml_training",
-  "description": "Classify audio using a lightweight PyTorch feature classifier for silence, speech-like audio, music-like audio, environmental noise, percussive impacts, and tonal signals.",
+  "description": "Classify audio using a lightweight NumPy feature classifier for silence, speech-like audio, music-like audio, environmental noise, percussive impacts, and tonal signals.",
   "version": "1.0.0",
   "sdkVersion": "1.0.0",
   "manifestVersion": "1",
@@ -38,10 +38,10 @@
       "description": "Include plain-language reasons for the predicted class."
     }
   ],
-  "dependencies": ["torch", "torchaudio", "soundfile", "pandas", "math"],
+  "dependencies": ["numpy", "soundfile", "pandas", "math"],
   "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
   "preview": "report",
   "cachePolicy": "content_hash",
-  "tags": ["audio", "classification", "pytorch", "speech", "music", "sound-events"],
+  "tags": ["audio", "classification", "numpy", "speech", "music", "sound-events"],
   "iconUrl": "https://api.iconify.design/mdi:brain.svg"
 }

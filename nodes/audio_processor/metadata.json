@@ -105,7 +105,7 @@
       "description": "File format for the processed waveform."
     }
   ],
-  "dependencies": ["torch", "torchaudio", "soundfile", "math", "json"],
+  "dependencies": ["numpy", "soundfile", "math", "json"],
   "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
   "preview": "report",
   "cachePolicy": "content_hash",

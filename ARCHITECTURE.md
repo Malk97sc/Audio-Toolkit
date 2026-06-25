@@ -34,9 +34,9 @@ audio_file -> waveform -> processed_waveform -> feature_summary -> classificatio
 
 ## Runtime Boundary
 
-Audio files are read and written with `soundfile`, which returns NumPy arrays. Nodes convert these arrays into Torch tensors at the boundary and keep the internal tensor shape as `[channels, samples]`.
+Audio files are read and written with `soundfile`, which returns NumPy arrays. Nodes keep processing in NumPy so runtime images do not need PyTorch shared libraries.
 
-Torchaudio is used for:
+NumPy is used for:
 
 | Operation | Node |
 | --- | --- |
@@ -47,7 +47,7 @@ Torchaudio is used for:
 
 ## Classifier
 
-The classifier is a lightweight PyTorch linear model over normalized DSP features:
+The classifier is a lightweight NumPy linear model over normalized DSP features:
 
 ```text
 rms_db
