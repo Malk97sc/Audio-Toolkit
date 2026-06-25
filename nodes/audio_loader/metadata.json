@@ -1,0 +1,47 @@
+{
+  "id": "audio_toolkit.audio_loader",
+  "name": "Audio Loader",
+  "category": "ingestion",
+  "description": "Load WAV, MP3, FLAC, OGG, and other torchaudio-supported files, standardize them into a workflow-ready audio artifact, and produce metadata for downstream analysis.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "audio_file", "type": "file", "label": "Audio File", "required": true }
+  ],
+  "outputs": [
+    { "id": "waveform", "type": "file", "label": "Waveform Audio" },
+    { "id": "sample_rate", "type": "metrics", "label": "Sample Rate" },
+    { "id": "metadata", "type": "report", "label": "Audio Metadata" },
+    { "id": "audio_report", "type": "report", "label": "Audio Report" }
+  ],
+  "params": [
+    {
+      "id": "output_format",
+      "label": "Working Audio Format",
+      "type": "select",
+      "default": "wav",
+      "options": ["wav", "flac"],
+      "required": false,
+      "description": "Format used for the workflow-ready audio copy. WAV is fastest and most compatible; FLAC is lossless and smaller."
+    },
+    {
+      "id": "preview_seconds",
+      "label": "Preview Seconds",
+      "type": "number",
+      "default": 3.0,
+      "required": false,
+      "min": 0.1,
+      "max": 30.0,
+      "step": 0.5,
+      "description": "How many seconds of waveform statistics to include in the human-readable report.",
+      "advanced": true
+    }
+  ],
+  "dependencies": ["torch", "soundfile", "json", "math", "os"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "report",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "loader", "waveform", "metadata", "torchaudio"],
+  "iconUrl": "https://api.iconify.design/mdi:file-music-outline.svg"
+}

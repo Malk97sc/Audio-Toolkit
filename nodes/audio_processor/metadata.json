@@ -1,0 +1,114 @@
+{
+  "id": "audio_toolkit.audio_processor",
+  "name": "Audio Processor",
+  "category": "preprocessing",
+  "description": "Prepare recordings for analysis with resampling, normalization, channel conversion, silence trimming, loudness adjustment, and clipping checks.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "audio", "type": "file", "label": "Audio", "required": true },
+    { "id": "metadata", "type": "report", "label": "Audio Metadata", "required": false }
+  ],
+  "outputs": [
+    { "id": "processed_waveform", "type": "file", "label": "Processed Waveform" },
+    { "id": "processing_report", "type": "report", "label": "Processing Report" },
+    { "id": "audio_statistics", "type": "metrics", "label": "Audio Statistics" }
+  ],
+  "params": [
+    {
+      "id": "target_sample_rate",
+      "label": "Target Sample Rate",
+      "type": "integer",
+      "default": 16000,
+      "required": false,
+      "min": 4000,
+      "max": 192000,
+      "step": 1000,
+      "description": "Resample audio to this rate in Hz. 16000 is a good default for speech and lightweight classification."
+    },
+    {
+      "id": "channels",
+      "label": "Channels",
+      "type": "select",
+      "default": "mono",
+      "options": ["mono", "stereo", "keep"],
+      "required": false,
+      "description": "Convert to mono, stereo, or keep the original channel layout."
+    },
+    {
+      "id": "normalize_peak",
+      "label": "Normalize Peaks",
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "description": "Scale the waveform so the loudest sample reaches the selected peak target."
+    },
+    {
+      "id": "target_peak",
+      "label": "Peak Target",
+      "type": "number",
+      "default": 0.95,
+      "required": false,
+      "min": 0.1,
+      "max": 1.0,
+      "step": 0.05,
+      "description": "Maximum absolute amplitude after peak normalization.",
+      "advanced": true
+    },
+    {
+      "id": "target_loudness_db",
+      "label": "Loudness Target dB",
+      "type": "number",
+      "default": -20.0,
+      "required": false,
+      "min": -60.0,
+      "max": -3.0,
+      "step": 1.0,
+      "description": "Approximate RMS loudness target. Used when volume normalization is enabled."
+    },
+    {
+      "id": "normalize_volume",
+      "label": "Normalize Volume",
+      "type": "boolean",
+      "default": false,
+      "required": false,
+      "description": "Apply RMS-based gain after resampling and channel conversion."
+    },
+    {
+      "id": "trim_silence",
+      "label": "Trim Silence",
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "description": "Remove quiet leading and trailing sections while preserving a short safety margin."
+    },
+    {
+      "id": "silence_threshold_db",
+      "label": "Silence Threshold dB",
+      "type": "number",
+      "default": -45.0,
+      "required": false,
+      "min": -90.0,
+      "max": -10.0,
+      "step": 1.0,
+      "description": "Samples quieter than this relative threshold are considered silence.",
+      "advanced": true
+    },
+    {
+      "id": "output_format",
+      "label": "Output Format",
+      "type": "select",
+      "default": "wav",
+      "options": ["wav", "flac"],
+      "required": false,
+      "description": "File format for the processed waveform."
+    }
+  ],
+  "dependencies": ["torch", "torchaudio", "soundfile", "math", "json"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "report",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "processing", "normalization", "resampling", "silence"],
+  "iconUrl": "https://api.iconify.design/mdi:tune-variant.svg"
+}

@@ -1,0 +1,47 @@
+{
+  "id": "audio_toolkit.audio_classifier",
+  "name": "Audio Classifier",
+  "category": "ml_training",
+  "description": "Classify audio using a lightweight PyTorch feature classifier for silence, speech-like audio, music-like audio, environmental noise, percussive impacts, and tonal signals.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "feature_vectors", "type": "table", "label": "Feature Vectors", "required": false },
+    { "id": "feature_summary", "type": "report", "label": "Feature Summary", "required": false },
+    { "id": "audio", "type": "file", "label": "Audio", "required": false }
+  ],
+  "outputs": [
+    { "id": "predicted_class", "type": "report", "label": "Predicted Class" },
+    { "id": "confidence_scores", "type": "metrics", "label": "Confidence Scores" },
+    { "id": "probability_distribution", "type": "table", "label": "Probability Distribution" },
+    { "id": "classification_report", "type": "report", "label": "Classification Report" }
+  ],
+  "params": [
+    {
+      "id": "confidence_threshold",
+      "label": "Confidence Threshold",
+      "type": "number",
+      "default": 0.55,
+      "required": false,
+      "min": 0.1,
+      "max": 0.95,
+      "step": 0.05,
+      "description": "Below this confidence, the classifier labels the result as uncertain in the report."
+    },
+    {
+      "id": "include_explanations",
+      "label": "Include Explanations",
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "description": "Include plain-language reasons for the predicted class."
+    }
+  ],
+  "dependencies": ["torch", "torchaudio", "soundfile", "pandas", "math"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "report",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "classification", "pytorch", "speech", "music", "sound-events"],
+  "iconUrl": "https://api.iconify.design/mdi:brain.svg"
+}

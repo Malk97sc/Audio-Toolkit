@@ -1,0 +1,96 @@
+{
+  "id": "audio_toolkit.feature_extractor",
+  "name": "Feature Extractor",
+  "category": "feature_engineering",
+  "description": "Convert audio into machine-learning features including spectrograms, mel spectrograms, MFCCs, zero crossing rate, spectral centroid, bandwidth, rolloff, and RMS energy.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "audio", "type": "file", "label": "Audio", "required": true },
+    { "id": "audio_statistics", "type": "metrics", "label": "Audio Statistics", "required": false }
+  ],
+  "outputs": [
+    { "id": "feature_vectors", "type": "table", "label": "Feature Vectors" },
+    { "id": "feature_summary", "type": "report", "label": "Feature Summary" },
+    { "id": "spectrogram_image", "type": "file", "label": "Spectrogram Image" },
+    { "id": "mel_spectrogram_image", "type": "file", "label": "Mel Spectrogram Image" },
+    { "id": "feature_metadata", "type": "report", "label": "Feature Metadata" }
+  ],
+  "params": [
+    {
+      "id": "sample_rate",
+      "label": "Analysis Sample Rate",
+      "type": "integer",
+      "default": 16000,
+      "required": false,
+      "min": 4000,
+      "max": 96000,
+      "step": 1000,
+      "description": "Resample to this rate before computing features."
+    },
+    {
+      "id": "n_fft",
+      "label": "FFT Window Size",
+      "type": "integer",
+      "default": 1024,
+      "required": false,
+      "min": 128,
+      "max": 8192,
+      "step": 128,
+      "description": "Frequency analysis window size. Larger values give more frequency detail.",
+      "advanced": true
+    },
+    {
+      "id": "hop_length",
+      "label": "Hop Length",
+      "type": "integer",
+      "default": 256,
+      "required": false,
+      "min": 32,
+      "max": 4096,
+      "step": 32,
+      "description": "Number of samples between analysis frames.",
+      "advanced": true
+    },
+    {
+      "id": "mel_bands",
+      "label": "Mel Bands",
+      "type": "integer",
+      "default": 64,
+      "required": false,
+      "min": 16,
+      "max": 256,
+      "step": 8,
+      "description": "Number of mel-frequency bands."
+    },
+    {
+      "id": "mfcc_count",
+      "label": "MFCC Count",
+      "type": "integer",
+      "default": 13,
+      "required": false,
+      "min": 4,
+      "max": 40,
+      "step": 1,
+      "description": "Number of MFCC coefficients to summarize."
+    },
+    {
+      "id": "rolloff_percent",
+      "label": "Spectral Rolloff Percent",
+      "type": "number",
+      "default": 0.85,
+      "required": false,
+      "min": 0.5,
+      "max": 0.99,
+      "step": 0.01,
+      "description": "Energy percentage used for spectral rolloff."
+    }
+  ],
+  "dependencies": ["torch", "torchaudio", "soundfile", "pandas", "matplotlib", "math"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "table_sample",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "features", "mfcc", "spectrogram", "mel", "dsp"],
+  "iconUrl": "https://api.iconify.design/mdi:chart-bell-curve.svg"
+}

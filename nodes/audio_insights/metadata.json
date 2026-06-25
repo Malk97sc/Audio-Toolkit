@@ -1,0 +1,47 @@
+{
+  "id": "audio_toolkit.audio_insights",
+  "name": "Audio Insights",
+  "category": "evaluation",
+  "description": "Turn audio statistics, features, classifier output, and visual artifacts into a human-readable analysis report for non-technical users.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "metadata", "type": "report", "label": "Audio Metadata", "required": false },
+    { "id": "processing_report", "type": "report", "label": "Processing Report", "required": false },
+    { "id": "audio_statistics", "type": "metrics", "label": "Audio Statistics", "required": false },
+    { "id": "feature_summary", "type": "report", "label": "Feature Summary", "required": false },
+    { "id": "classification_report", "type": "report", "label": "Classification Report", "required": false },
+    { "id": "visualization_report", "type": "report", "label": "Visualization Report", "required": false }
+  ],
+  "outputs": [
+    { "id": "structured_report", "type": "report", "label": "Structured Report" },
+    { "id": "markdown_summary", "type": "text", "label": "Markdown Summary" },
+    { "id": "metrics", "type": "metrics", "label": "Insight Metrics" }
+  ],
+  "params": [
+    {
+      "id": "audience",
+      "label": "Audience",
+      "type": "select",
+      "default": "general",
+      "options": ["general", "technical", "executive"],
+      "required": false,
+      "description": "Controls the wording and amount of technical detail in the summary."
+    },
+    {
+      "id": "include_recommendations",
+      "label": "Include Recommendations",
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "description": "Add practical next steps based on quality, features, and classification confidence."
+    }
+  ],
+  "dependencies": ["json", "math"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "report",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "insights", "report", "summary", "analysis"],
+  "iconUrl": "https://api.iconify.design/mdi:file-chart-outline.svg"
+}

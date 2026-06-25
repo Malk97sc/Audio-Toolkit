@@ -1,0 +1,30 @@
+{
+  "id": "community.audio_toolkit",
+  "name": "Audio Toolkit",
+  "version": "1.0.0",
+  "manifestVersion": "1",
+  "sdkVersion": "1.0.0",
+  "description": "End-to-end audio analysis toolkit for loading recordings, preparing signals, extracting DSP features, classifying audio content, rendering spectrograms, and producing human-readable insights.",
+  "author": "Data2Flow Community",
+  "repository": "https://github.com/Malk97sc/Audio-Toolkit",
+  "permissions": {
+    "filesystem": "workspace",
+    "network": false,
+    "subprocess": false
+  },
+  "pythonDependencies": [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.5.0",
+    "soundfile>=0.12.1"
+  ],
+  "nodes": [
+    { "path": "nodes/audio_loader" },
+    { "path": "nodes/audio_processor" },
+    { "path": "nodes/feature_extractor" },
+    { "path": "nodes/audio_classifier" },
+    { "path": "nodes/spectrogram_viewer" },
+    { "path": "nodes/audio_insights" }
+  ]
+}

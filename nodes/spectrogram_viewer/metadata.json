@@ -1,0 +1,58 @@
+{
+  "id": "audio_toolkit.spectrogram_viewer",
+  "name": "Spectrogram Viewer",
+  "category": "visualization",
+  "description": "Create human-friendly waveform, spectrogram, and mel spectrogram images from audio, with visual settings suitable for reports and review.",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "manifestVersion": "1",
+  "inputs": [
+    { "id": "audio", "type": "file", "label": "Audio", "required": true },
+    { "id": "feature_summary", "type": "report", "label": "Feature Summary", "required": false }
+  ],
+  "outputs": [
+    { "id": "waveform_plot", "type": "file", "label": "Waveform Plot" },
+    { "id": "spectrogram_plot", "type": "file", "label": "Spectrogram Plot" },
+    { "id": "mel_spectrogram_plot", "type": "file", "label": "Mel Spectrogram Plot" },
+    { "id": "visualization_report", "type": "report", "label": "Visualization Report" }
+  ],
+  "params": [
+    {
+      "id": "sample_rate",
+      "label": "Visualization Sample Rate",
+      "type": "integer",
+      "default": 16000,
+      "required": false,
+      "min": 4000,
+      "max": 96000,
+      "step": 1000,
+      "description": "Resample audio to this rate for visualization."
+    },
+    {
+      "id": "theme",
+      "label": "Plot Theme",
+      "type": "select",
+      "default": "accessible",
+      "options": ["accessible", "dark", "print"],
+      "required": false,
+      "description": "Visual style for generated plots."
+    },
+    {
+      "id": "max_seconds",
+      "label": "Max Seconds To Plot",
+      "type": "number",
+      "default": 30.0,
+      "required": false,
+      "min": 1.0,
+      "max": 600.0,
+      "step": 1.0,
+      "description": "Limit plots to the first N seconds so long recordings remain readable."
+    }
+  ],
+  "dependencies": ["torch", "torchaudio", "soundfile", "matplotlib", "math"],
+  "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
+  "preview": "plot",
+  "cachePolicy": "content_hash",
+  "tags": ["audio", "visualization", "spectrogram", "waveform", "mel"],
+  "iconUrl": "https://api.iconify.design/mdi:waveform.svg"
+}
