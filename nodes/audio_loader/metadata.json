@@ -2,7 +2,7 @@
   "id": "audio_toolkit.audio_loader",
   "name": "Audio Loader",
   "category": "ingestion",
-  "description": "Load WAV, MP3, FLAC, OGG, and other torchaudio-supported files, standardize them into a workflow-ready audio artifact, and produce metadata for downstream analysis.",
+  "description": "Load WAV, FLAC, OGG, and other libsndfile-supported files, standardize them into a workflow-ready audio artifact, and produce metadata for downstream analysis.",
   "version": "1.0.0",
   "sdkVersion": "1.0.0",
   "manifestVersion": "1",
@@ -38,10 +38,10 @@
       "advanced": true
     }
   ],
-  "dependencies": ["torch", "soundfile", "json", "math", "os"],
+  "dependencies": ["soundfile", "json", "math", "os"],
   "permissions": { "filesystem": "workspace", "network": false, "subprocess": false },
   "preview": "report",
   "cachePolicy": "content_hash",
-  "tags": ["audio", "loader", "waveform", "metadata", "torchaudio"],
+  "tags": ["audio", "loader", "waveform", "metadata", "soundfile"],
   "iconUrl": "https://api.iconify.design/mdi:file-music-outline.svg"
 }

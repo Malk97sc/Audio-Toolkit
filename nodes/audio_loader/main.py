@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 
 import soundfile as sf
-import torch
 
 
 def _input_path(value) -> str:
@@ -20,15 +19,28 @@ def _safe_float(value: float, digits: int = 4):
     return None
 
 
-def _channel_summary(waveform: torch.Tensor) -> list[dict]:
+def _empty_channel_stats(channels: int) -> list[dict]:
+    return [{"peak": 0.0, "sum_squares": 0.0, "samples": 0} for _ in range(channels)]
+
+
+def _update_channel_stats(stats: list[dict], block) -> None:
+    for channel_index in range(block.shape[1]):
+        channel = block[:, channel_index]
+        current = stats[channel_index]
+        current["peak"] = max(current["peak"], float(abs(channel).max(initial=0.0)))
+        current["sum_squares"] += float((channel * channel).sum())
+        current["samples"] += int(channel.shape[0])
+
+
+def _channel_summary(stats: list[dict]) -> list[dict]:
     result = []
-    for index, channel in enumerate(waveform.float()):
-        peak = channel.abs().max().item() if channel.numel() else 0.0
-        rms = torch.sqrt(torch.mean(channel.square())).item() if channel.numel() else 0.0
+    for index, item in enumerate(stats):
+        samples = max(1, int(item["samples"]))
+        rms = math.sqrt(float(item["sum_squares"]) / samples)
         result.append(
             {
                 "channel": index + 1,
-                "peak_amplitude": _safe_float(peak, 6),
+                "peak_amplitude": _safe_float(float(item["peak"]), 6),
                 "rms_amplitude": _safe_float(rms, 6),
                 "rms_db": _safe_float(20.0 * math.log10(max(rms, 1e-12)), 2),
             }
@@ -36,26 +48,19 @@ def _channel_summary(waveform: torch.Tensor) -> list[dict]:
     return result
 
 
-def _load_audio(path: str) -> tuple[torch.Tensor, int]:
-    data, sample_rate = sf.read(path, always_2d=True, dtype="float32")
-    waveform = torch.from_numpy(data).transpose(0, 1).contiguous()
-    return waveform, int(sample_rate)
+def _audio_info(path: str):
+    try:
+        return sf.info(path)
+    except Exception as exc:
+        raise ValueError(f"Audio file is not readable by libsndfile: {exc}") from exc
 
 
-def _save_audio(path: str, waveform: torch.Tensor, sample_rate: int) -> None:
-    data = waveform.detach().cpu().transpose(0, 1).numpy()
-    sf.write(path, data, sample_rate)
-
-
-def _metadata(path: str, waveform: torch.Tensor, sample_rate: int) -> dict:
+def _metadata(path: str, info, channel_stats: list[dict]) -> dict:
     file_path = Path(path)
     file_size = file_path.stat().st_size
-    duration = waveform.shape[-1] / float(sample_rate)
-    info = None
-    try:
-        info = sf.info(path)
-    except Exception:
-        info = None
+    sample_rate = int(info.samplerate)
+    frames = int(info.frames)
+    duration = frames / float(sample_rate) if sample_rate > 0 else 0.0
 
     bitrate = None
     if duration > 0:
@@ -69,16 +74,46 @@ def _metadata(path: str, waveform: torch.Tensor, sample_rate: int) -> dict:
         "format": file_path.suffix.lstrip(".").lower() or "unknown",
         "file_size_bytes": file_size,
         "sample_rate": sample_rate,
-        "channels": int(waveform.shape[0]),
-        "samples": int(waveform.shape[-1]),
+        "channels": int(info.channels),
+        "samples": frames,
         "duration_seconds": _safe_float(duration, 4),
         "estimated_bitrate_bps": bitrate,
         "encoding": encoding,
         "subtype": subtype_info,
         "soundfile_supported": True,
     }
-    metadata["channel_summary"] = _channel_summary(waveform)
+    metadata["channel_summary"] = _channel_summary(channel_stats)
     return metadata
+
+
+def _output_subtype(source, output_format: str) -> str:
+    if source.format.upper() == output_format.upper() and source.subtype:
+        return source.subtype
+    return "PCM_16"
+
+
+def _copy_audio_stream(source_path: str, output_path: str, output_format: str, block_size: int = 65536) -> tuple[object, list[dict]]:
+    info = _audio_info(source_path)
+    if info.frames <= 0:
+        raise ValueError("Audio file contains no samples.")
+
+    stats = _empty_channel_stats(int(info.channels))
+    with sf.SoundFile(source_path, mode="r") as source:
+        with sf.SoundFile(
+            output_path,
+            mode="w",
+            samplerate=source.samplerate,
+            channels=source.channels,
+            format=output_format.upper(),
+            subtype=_output_subtype(source, output_format),
+        ) as target:
+            while True:
+                block = source.read(block_size, dtype="float32", always_2d=True)
+                if block.size == 0:
+                    break
+                _update_channel_stats(stats, block)
+                target.write(block)
+    return info, stats
 
 
 def _report(metadata: dict, preview_seconds: float) -> dict:
@@ -123,24 +158,20 @@ def run(inputs: dict, params: dict, context) -> dict:
         raise ValueError("Preview Seconds must be greater than zero.")
 
     context.log(f"Loading audio from {source_path}")
-    waveform, sample_rate = _load_audio(source_path)
-    if waveform.numel() == 0:
-        raise ValueError("Audio file contains no samples.")
+    output_path = context.output_path(f"waveform.{output_format}", port_id="waveform")
+    info, channel_stats = _copy_audio_stream(source_path, output_path, output_format)
 
-    metadata = _metadata(source_path, waveform, sample_rate)
+    metadata = _metadata(source_path, info, channel_stats)
     report = _report(metadata, preview_seconds)
 
-    output_path = context.output_path(f"waveform.{output_format}", port_id="waveform")
-    _save_audio(output_path, waveform, sample_rate)
-
-    context.emit_metric("sample_rate", sample_rate, port_id="sample_rate")
+    context.emit_metric("sample_rate", metadata["sample_rate"], port_id="sample_rate")
     context.emit_metric("duration_seconds", metadata["duration_seconds"], port_id="sample_rate")
     context.emit_metric("channels", metadata["channels"], port_id="sample_rate")
 
     return {
         "waveform": output_path,
         "sample_rate": {
-            "sample_rate": sample_rate,
+            "sample_rate": metadata["sample_rate"],
             "duration_seconds": metadata["duration_seconds"],
             "channels": metadata["channels"],
         },
